@@ -1,0 +1,85 @@
+import nodemailer from 'nodemailer';
+import { env } from '../config/env';
+
+// Create a transporter or mock it
+let transporter: nodemailer.Transporter | null = null;
+
+const getTransporter = () => {
+  if (transporter) return transporter;
+
+  const isConfigured =
+    env.EMAIL.HOST &&
+    env.EMAIL.USER &&
+    env.EMAIL.USER !== 'mock_user';
+
+  if (isConfigured) {
+    transporter = nodemailer.createTransport({
+      host: env.EMAIL.HOST,
+      port: env.EMAIL.PORT,
+      secure: env.EMAIL.PORT === 465,
+      auth: {
+        user: env.EMAIL.USER,
+        pass: env.EMAIL.PASS,
+      },
+    });
+  }
+  return transporter;
+};
+
+export const sendEmail = async (to: string, subject: string, html: string): Promise<boolean> => {
+  const currentTransporter = getTransporter();
+
+  if (currentTransporter) {
+    try {
+      await currentTransporter.sendMail({
+        from: env.EMAIL.FROM,
+        to,
+        subject,
+        html,
+      });
+      console.log(`[EMAIL SUCCESS] Sent email to ${to} with subject "${subject}"`);
+      return true;
+    } catch (error) {
+      console.error('[EMAIL ERROR] Failed to send email via SMTP:', error);
+    }
+  }
+
+  // Fallback dev console logger
+  console.log(`
+=========================================
+[DEV EMAIL OUTBOX]
+To: ${to}
+Subject: ${subject}
+Content:
+${html.replace(/<[^>]*>/g, '\n')}
+=========================================
+`);
+  return true;
+};
+
+// Ready-to-use mail templates
+export const sendVerificationEmail = async (email: string, token: string): Promise<boolean> => {
+  const verifyUrl = `${env.CLIENT_URL}/verify-email?token=${token}`;
+  const html = `
+    <h3>Welcome to CryptoPlatform!</h3>
+    <p>Please verify your email by clicking the link below:</p>
+    <a href="${verifyUrl}" target="_blank" style="padding: 10px 20px; background: #00e676; color: black; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Verify Email</a>
+    <p>If button doesn't work, copy-paste this link in your browser:</p>
+    <p>${verifyUrl}</p>
+    <p>This token will expire in 24 hours.</p>
+  `;
+  return sendEmail(email, 'Verify Your Email Address - CryptoPlatform', html);
+};
+
+export const sendPasswordResetEmail = async (email: string, token: string): Promise<boolean> => {
+  const resetUrl = `${env.CLIENT_URL}/reset-password?token=${token}`;
+  const html = `
+    <h3>Password Reset Request</h3>
+    <p>You requested a password reset. Click the button below to set a new password:</p>
+    <a href="${resetUrl}" target="_blank" style="padding: 10px 20px; background: #d500f9; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Reset Password</a>
+    <p>If button doesn't work, copy-paste this link in your browser:</p>
+    <p>${resetUrl}</p>
+    <p>This link will expire in 1 hour.</p>
+  `;
+  return sendEmail(email, 'Reset Password - CryptoPlatform', html);
+};
