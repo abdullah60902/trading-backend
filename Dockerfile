@@ -1,5 +1,7 @@
 # Use official Node.js image
 FROM node:20-alpine
+# Install build dependencies for native modules like bcrypt
+RUN apk add --no-cache python3 make g++
 
 # Set up a non-root user for Hugging Face Spaces security requirements
 RUN adduser -D -u 1000 appuser
