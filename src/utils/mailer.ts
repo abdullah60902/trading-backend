@@ -1,50 +1,34 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
 
-// Create a transporter or mock it
-let transporter: nodemailer.Transporter | null = null;
-
-const getTransporter = () => {
-  if (transporter) return transporter;
-
-  const isConfigured =
-    env.EMAIL.HOST &&
-    env.EMAIL.USER &&
-    env.EMAIL.USER !== 'mock_user';
-
-  if (isConfigured) {
-    transporter = nodemailer.createTransport({
-      host: env.EMAIL.HOST,
-      port: env.EMAIL.PORT,
-      secure: env.EMAIL.PORT === 465,
-      connectionTimeout: 5000,
-      greetingTimeout: 5000,
-      socketTimeout: 5000,
-      auth: {
-        user: env.EMAIL.USER,
-        pass: env.EMAIL.PASS,
-      },
-    });
-  }
-  return transporter;
-};
-
 export const sendEmail = async (to: string, subject: string, html: string): Promise<boolean> => {
-  const currentTransporter = getTransporter();
+  try {
+    // User provided Resend Token
+    const resendApiKey = process.env.RESEND_API_KEY || 're_RCMpAzfw_ANXQKMZ1DDKyfyr8pWZjd5VQ';
+    
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${resendApiKey}`
+      },
+      body: JSON.stringify({
+        from: 'CryptoPlatform <onboarding@resend.dev>',
+        to: [to],
+        subject: subject,
+        html: html
+      })
+    });
 
-  if (currentTransporter) {
-    try {
-      await currentTransporter.sendMail({
-        from: env.EMAIL.FROM,
-        to,
-        subject,
-        html,
-      });
-      console.log(`[EMAIL SUCCESS] Sent email to ${to} with subject "${subject}"`);
+    const data = await response.json();
+    if (response.ok) {
+      console.log(`[EMAIL SUCCESS] Sent via Resend to ${to}:`, data);
       return true;
-    } catch (error) {
-      console.error('[EMAIL ERROR] Failed to send email via SMTP:', error);
+    } else {
+      console.error('[EMAIL ERROR] Resend API failed:', data);
     }
+  } catch (error) {
+    console.error('[EMAIL ERROR] Failed to send email via HTTP:', error);
   }
 
   // Fallback dev console logger
