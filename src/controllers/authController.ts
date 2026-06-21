@@ -130,13 +130,13 @@ export const signup = async (req: any, res: Response): Promise<void> => {
     await logUserActivity(user._id.toString(), 'ACCOUNT_CREATED', req);
 
     res.status(201).json({
-      message: 'Signup successful. Please check your email to verify your account.',
+      message: 'Signup successful. You can now log in.',
       user: {
         id: user._id,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        isEmailVerified: false,
+        isEmailVerified: true,
       },
     });
   } catch (error) {
@@ -299,10 +299,7 @@ export const login = async (req: any, res: Response): Promise<void> => {
       return;
     }
 
-    if (!user.isEmailVerified) {
-      res.status(403).json({ error: 'Please verify your email before logging in.' });
-      return;
-    }
+
 
     // Check if 2FA is active
     if (user.twoFactorEnabled) {

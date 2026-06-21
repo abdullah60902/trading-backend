@@ -120,13 +120,13 @@ const signup = async (req, res) => {
         // Audit log
         await logUserActivity(user._id.toString(), 'ACCOUNT_CREATED', req);
         res.status(201).json({
-            message: 'Signup successful. Please check your email to verify your account.',
+            message: 'Signup successful. You can now log in.',
             user: {
                 id: user._id,
                 email: user.email,
                 firstName: user.firstName,
                 lastName: user.lastName,
-                isEmailVerified: false,
+                isEmailVerified: true,
             },
         });
     }
@@ -263,10 +263,6 @@ const login = async (req, res) => {
         }
         if (user.status === 'suspended') {
             res.status(403).json({ error: 'Your account has been suspended. Please contact support.' });
-            return;
-        }
-        if (!user.isEmailVerified) {
-            res.status(403).json({ error: 'Please verify your email before logging in.' });
             return;
         }
         // Check if 2FA is active

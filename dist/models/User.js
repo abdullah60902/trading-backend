@@ -39,7 +39,7 @@ const UserSchema = new mongoose_1.Schema({
     },
     isEmailVerified: {
         type: Boolean,
-        default: false,
+        default: true,
     },
     isMobileVerified: {
         type: Boolean,
@@ -70,7 +70,7 @@ const UserSchema = new mongoose_1.Schema({
     status: {
         type: String,
         enum: ['active', 'suspended', 'pending'],
-        default: 'pending',
+        default: 'active',
     },
     referralCode: {
         type: String,
