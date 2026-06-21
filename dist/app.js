@@ -8,13 +8,26 @@ const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const crypto_1 = __importDefault(require("crypto"));
+const express_mongo_sanitize_1 = __importDefault(require("express-mongo-sanitize"));
+const hpp_1 = __importDefault(require("hpp"));
 const routes_1 = __importDefault(require("./routes"));
 const security_1 = require("./middleware/security");
 const errorHandler_1 = require("./middleware/errorHandler");
 const env_1 = require("./config/env");
 const app = (0, express_1.default)();
-// Security Headers
-app.use((0, helmet_1.default)());
+// Security Headers (Enforce strict CSP and HSTS)
+app.use((0, helmet_1.default)({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:", "res.cloudinary.com"],
+            connectSrc: ["'self'", env_1.env.CLIENT_URL],
+        },
+    },
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 // CORS Policy
 app.use((0, cors_1.default)({
     origin: env_1.env.CLIENT_URL,
@@ -23,8 +36,12 @@ app.use((0, cors_1.default)({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
 }));
 // Body and Cookie Parsers
-app.use(express_1.default.json());
+app.use(express_1.default.json({ limit: '10kb' })); // Limit body size to prevent payload DOS
 app.use((0, cookie_parser_1.default)());
+// NoSQL Injection Prevention
+app.use((0, express_mongo_sanitize_1.default)());
+// HTTP Parameter Pollution Prevention
+app.use((0, hpp_1.default)());
 // Anti-XSS and Rate Limiter
 app.use(security_1.xssClean);
 app.use('/api', security_1.apiRateLimiter);

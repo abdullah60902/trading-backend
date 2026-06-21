@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import crypto from 'crypto';
+import mongoSanitize from 'express-mongo-sanitize';
+import hpp from 'hpp';
 import routes from './routes';
 import { xssClean, csrfCheck, apiRateLimiter } from './middleware/security';
 import { errorHandler } from './middleware/errorHandler';
@@ -10,8 +12,19 @@ import { env } from './config/env';
 
 const app = express();
 
-// Security Headers
-app.use(helmet());
+// Security Headers (Enforce strict CSP and HSTS)
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "res.cloudinary.com"],
+      connectSrc: ["'self'", env.CLIENT_URL],
+    },
+  },
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 
 // CORS Policy
 app.use(
@@ -24,8 +37,14 @@ app.use(
 );
 
 // Body and Cookie Parsers
-app.use(express.json());
+app.use(express.json({ limit: '10kb' })); // Limit body size to prevent payload DOS
 app.use(cookieParser());
+
+// NoSQL Injection Prevention
+app.use(mongoSanitize());
+
+// HTTP Parameter Pollution Prevention
+app.use(hpp());
 
 // Anti-XSS and Rate Limiter
 app.use(xssClean);
