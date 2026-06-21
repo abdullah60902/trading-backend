@@ -10,8 +10,8 @@ WORKDIR /app
 # Copy package.json and package-lock.json and set ownership
 COPY --chown=appuser:appuser package*.json ./
 
-# Install dependencies
-RUN npm install
+# Install all dependencies including devDependencies for build
+RUN npm install --include=dev
 
 # Copy the rest of the application code and set ownership
 COPY --chown=appuser:appuser . .
