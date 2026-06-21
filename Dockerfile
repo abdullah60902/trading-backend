@@ -10,14 +10,11 @@ WORKDIR /app
 # Copy package.json and package-lock.json and set ownership
 COPY --chown=appuser:appuser package*.json ./
 
-# Install all dependencies including devDependencies for build
-RUN npm install --include=dev
+# Install only production dependencies
+RUN npm install --omit=dev
 
-# Copy the rest of the application code and set ownership
+# Copy the rest of the application code (including dist/) and set ownership
 COPY --chown=appuser:appuser . .
-
-# Build the TypeScript code
-RUN npm run build
 
 # Switch to non-root user
 USER appuser

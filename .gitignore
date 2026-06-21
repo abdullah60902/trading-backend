@@ -4,8 +4,8 @@
 .pnp.*
 
 # production/build
-/dist
-/build
+# /dist
+# /build
 
 # environment variables
 .env

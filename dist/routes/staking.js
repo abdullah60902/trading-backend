@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const stakingController_1 = require("../controllers/stakingController");
+const auth_1 = require("../middleware/auth");
+const router = (0, express_1.Router)();
+router.use(auth_1.requireAuth);
+router.post('/stake', stakingController_1.createStaking);
+router.get('/stats', stakingController_1.getStakingStats);
+router.get('/earnings', stakingController_1.getEarnings);
+router.post('/credit-mock-earning', stakingController_1.creditMockEarning);
+router.post('/trigger-payout', stakingController_1.triggerStakingPayout);
+exports.default = router;
