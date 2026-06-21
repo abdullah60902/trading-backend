@@ -37,8 +37,8 @@ app.get('/api/v1/csrf-token', (req, res) => {
   
   res.cookie('csrf-token', csrfToken, {
     httpOnly: false, // Accessible by frontend JS to copy into custom request headers
-    secure: env.NODE_ENV === 'production',
-    sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure: true, // Always true for cross-origin over HTTPS
+    sameSite: 'none', // Always 'none' for cross-origin
     maxAge: 3600000, // 1 hour
   });
 

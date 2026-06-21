@@ -301,8 +301,8 @@ const login = async (req, res) => {
         // Set Refresh Token in cookie
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
-            secure: env_1.env.NODE_ENV === 'production',
-            sameSite: env_1.env.NODE_ENV === 'production' ? 'none' : 'lax',
+            secure: true,
+            sameSite: 'none',
             maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         });
         // Device Login Tracking Log

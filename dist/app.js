@@ -33,8 +33,8 @@ app.get('/api/v1/csrf-token', (req, res) => {
     const csrfToken = crypto_1.default.randomBytes(32).toString('hex');
     res.cookie('csrf-token', csrfToken, {
         httpOnly: false, // Accessible by frontend JS to copy into custom request headers
-        secure: env_1.env.NODE_ENV === 'production',
-        sameSite: env_1.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        secure: true, // Always true for cross-origin over HTTPS
+        sameSite: 'none', // Always 'none' for cross-origin
         maxAge: 3600000, // 1 hour
     });
     res.status(200).json({ csrfToken });

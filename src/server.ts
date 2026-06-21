@@ -21,8 +21,8 @@ const startServer = async () => {
     const server = http.createServer(app);
     initSocket(server);
 
-    // 5. Listen to incoming requests
-    server.listen(env.PORT, () => {
+    // 5. Listen to incoming requests on 0.0.0.0 for Docker environments
+    server.listen(env.PORT, '0.0.0.0', () => {
       console.log(`=========================================`);
       console.log(`🚀 Crypto Platform Server running!`);
       console.log(`🔌 Mode: ${env.NODE_ENV}`);
