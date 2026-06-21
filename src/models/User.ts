@@ -36,7 +36,7 @@ const UserSchema = new Schema<IUser>(
     },
     isEmailVerified: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     isMobileVerified: {
       type: Boolean,
@@ -67,7 +67,7 @@ const UserSchema = new Schema<IUser>(
     status: {
       type: String,
       enum: ['active', 'suspended', 'pending'],
-      default: 'active',
+      default: 'pending',
     },
     referralCode: {
       type: String,
