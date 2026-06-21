@@ -17,6 +17,9 @@ const getTransporter = () => {
       host: env.EMAIL.HOST,
       port: env.EMAIL.PORT,
       secure: env.EMAIL.PORT === 465,
+      connectionTimeout: 5000, // Fail fast in 5 seconds if blocked by HuggingFace
+      greetingTimeout: 5000,
+      socketTimeout: 5000,
       auth: {
         user: env.EMAIL.USER,
         pass: env.EMAIL.PASS,

@@ -123,8 +123,10 @@ export const signup = async (req: any, res: Response): Promise<void> => {
       });
     }
 
-    // Send Verification Email
-    await sendVerificationEmail(user.email, verificationToken);
+    // Send Verification Email asynchronously (Fire and forget) to prevent UI hanging
+    sendVerificationEmail(user.email, verificationToken).catch(err => {
+      console.error('[BG EMAIL ERROR]', err);
+    });
 
     // Audit log
     await logUserActivity(user._id.toString(), 'ACCOUNT_CREATED', req);

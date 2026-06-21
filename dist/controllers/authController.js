@@ -115,8 +115,10 @@ const signup = async (req, res) => {
                 depositAddress: address,
             });
         }
-        // Send Verification Email
-        await (0, mailer_1.sendVerificationEmail)(user.email, verificationToken);
+        // Send Verification Email asynchronously (Fire and forget) to prevent UI hanging
+        (0, mailer_1.sendVerificationEmail)(user.email, verificationToken).catch(err => {
+            console.error('[BG EMAIL ERROR]', err);
+        });
         // Audit log
         await logUserActivity(user._id.toString(), 'ACCOUNT_CREATED', req);
         res.status(201).json({
