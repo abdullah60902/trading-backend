@@ -1,35 +1,51 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendPasswordResetEmail = exports.sendVerificationEmail = exports.sendEmail = void 0;
+const nodemailer_1 = __importDefault(require("nodemailer"));
 const env_1 = require("../config/env");
-const sendEmail = async (to, subject, html) => {
-    try {
-        // User provided Resend Token
-        const resendApiKey = process.env.RESEND_API_KEY || 're_RCMpAzfw_ANXQKMZ1DDKyfyr8pWZjd5VQ';
-        const response = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${resendApiKey}`
+// Create a transporter or mock it
+let transporter = null;
+const getTransporter = () => {
+    if (transporter)
+        return transporter;
+    const isConfigured = env_1.env.EMAIL.HOST &&
+        env_1.env.EMAIL.USER &&
+        env_1.env.EMAIL.USER !== 'mock_user';
+    if (isConfigured) {
+        transporter = nodemailer_1.default.createTransport({
+            host: env_1.env.EMAIL.HOST,
+            port: env_1.env.EMAIL.PORT,
+            secure: env_1.env.EMAIL.PORT === 465,
+            connectionTimeout: 5000,
+            greetingTimeout: 5000,
+            socketTimeout: 5000,
+            auth: {
+                user: env_1.env.EMAIL.USER,
+                pass: env_1.env.EMAIL.PASS,
             },
-            body: JSON.stringify({
-                from: 'CryptoPlatform <onboarding@resend.dev>',
-                to: [to],
-                subject: subject,
-                html: html
-            })
         });
-        const data = await response.json();
-        if (response.ok) {
-            console.log(`[EMAIL SUCCESS] Sent via Resend to ${to}:`, data);
+    }
+    return transporter;
+};
+const sendEmail = async (to, subject, html) => {
+    const currentTransporter = getTransporter();
+    if (currentTransporter) {
+        try {
+            await currentTransporter.sendMail({
+                from: env_1.env.EMAIL.FROM,
+                to,
+                subject,
+                html,
+            });
+            console.log(`[EMAIL SUCCESS] Sent email to ${to} with subject "${subject}"`);
             return true;
         }
-        else {
-            console.error('[EMAIL ERROR] Resend API failed:', data);
+        catch (error) {
+            console.error('[EMAIL ERROR] Failed to send email via SMTP:', error);
         }
-    }
-    catch (error) {
-        console.error('[EMAIL ERROR] Failed to send email via HTTP:', error);
     }
     // Fallback dev console logger
     console.log(`
