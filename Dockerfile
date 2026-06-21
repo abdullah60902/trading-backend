@@ -1,10 +1,8 @@
-# Use official Node.js image
-FROM node:20-alpine
-# Install build dependencies for native modules like bcrypt
-RUN apk add --no-cache python3 make g++
+# Use standard Node.js image to avoid Alpine/musl compatibility issues with bcrypt
+FROM node:20
 
 # Set up a non-root user for Hugging Face Spaces security requirements
-RUN adduser -D -u 1000 appuser
+RUN useradd -m -u 1000 appuser
 
 # Set working directory
 WORKDIR /app
