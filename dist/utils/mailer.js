@@ -4,176 +4,128 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendPasswordResetEmail = exports.sendVerificationEmail = exports.sendEmail = void 0;
-const resend_1 = require("resend");
-const nodemailer_1 = __importDefault(require("nodemailer"));
+const https_1 = __importDefault(require("https"));
 const env_1 = require("../config/env");
-// Resend client
-let resendClient = null;
-// Fallback SMTP transporter
-let smtpTransporter = null;
-let smtpConnected = false;
-// Initialize Resend client if API key is available
-const getResendClient = () => {
-    if (resendClient)
-        return resendClient;
-    if (env_1.env.RESEND_API_KEY) {
-        resendClient = new resend_1.Resend(env_1.env.RESEND_API_KEY);
-        console.log(`[EMAIL] ✓ Resend API client initialized`);
-        return resendClient;
-    }
-    return null;
-};
-// Initialize SMTP transporter as fallback
-const getSMTPTransporter = () => {
-    if (smtpTransporter)
-        return smtpTransporter;
-    const isConfigured = env_1.env.EMAIL.HOST &&
-        env_1.env.EMAIL.USER &&
-        env_1.env.EMAIL.USER !== 'mock_user';
-    if (!isConfigured)
-        return null;
-    const isSSL = env_1.env.EMAIL.PORT === 465;
-    const transportConfig = {
-        host: env_1.env.EMAIL.HOST,
-        port: env_1.env.EMAIL.PORT,
-        secure: isSSL,
-        connectionTimeout: 30000,
-        greetingTimeout: 30000,
-        socketTimeout: 30000,
-        rejectUnauthorized: false,
-        maxConnections: 5,
-        maxMessages: 100,
-        rateDelta: 1000,
-        rateLimit: 14,
-        auth: {
-            user: env_1.env.EMAIL.USER,
-            pass: env_1.env.EMAIL.PASS,
-        },
-    };
-    smtpTransporter = nodemailer_1.default.createTransport(transportConfig);
-    console.log(`[EMAIL] ✓ SMTP Transporter created: ${env_1.env.EMAIL.HOST}:${env_1.env.EMAIL.PORT} (${isSSL ? 'SSL' : 'TLS'})`);
-    // Verify connection once
-    smtpTransporter.verify((error, success) => {
-        if (error) {
-            console.error(`[EMAIL WARNING] SMTP verification failed:`, error.message);
-            smtpConnected = false;
+// ─── Brevo HTTP API (No SMTP - works on all cloud providers) ─────────────────
+const sendViaBrevo = (to, subject, html) => {
+    return new Promise((resolve) => {
+        if (!env_1.env.BREVO_API_KEY) {
+            console.warn('[EMAIL] ⚠️  BREVO_API_KEY not set.');
+            resolve(false);
+            return;
         }
-        else {
-            console.log(`[EMAIL ✓] SMTP connection verified`);
-            smtpConnected = true;
-        }
+        const senderEmail = env_1.env.EMAIL.USER || 'info.bright.future.ser@gmail.com';
+        const payload = JSON.stringify({
+            sender: { name: 'Crypto Platform', email: senderEmail },
+            to: [{ email: to }],
+            subject,
+            htmlContent: html,
+        });
+        const options = {
+            hostname: 'api.brevo.com',
+            path: '/v3/smtp/email',
+            method: 'POST',
+            headers: {
+                'accept': 'application/json',
+                'api-key': env_1.env.BREVO_API_KEY,
+                'content-type': 'application/json',
+                'content-length': Buffer.byteLength(payload),
+            },
+        };
+        const req = https_1.default.request(options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+                        console.log(`[EMAIL] ✓ Email sent via Brevo to ${to} | ID: ${parsed.messageId}`);
+                        resolve(true);
+                    }
+                    else {
+                        console.error(`[EMAIL] ❌ Brevo error [${res.statusCode}]:`, JSON.stringify(parsed));
+                        resolve(false);
+                    }
+                }
+                catch {
+                    console.error('[EMAIL] ❌ Failed to parse Brevo response');
+                    resolve(false);
+                }
+            });
+        });
+        req.on('error', (err) => {
+            console.error('[EMAIL] ❌ Brevo request error:', err.message);
+            resolve(false);
+        });
+        req.write(payload);
+        req.end();
     });
-    return smtpTransporter;
 };
+// ─── Core Send Function ───────────────────────────────────────────────────────
 const sendEmail = async (to, subject, html) => {
     const isProduction = env_1.env.NODE_ENV === 'production';
     console.log(`[EMAIL] Attempting to send email to: ${to}`);
-    console.log(`[EMAIL DEBUG] RESEND_API_KEY available: ${!!env_1.env.RESEND_API_KEY}`);
-    // Try Resend first (preferred method)
-    const resend = getResendClient();
-    if (resend) {
-        try {
-            console.log(`[EMAIL] Sending via Resend API...`);
-            const response = await resend.emails.send({
-                from: env_1.env.EMAIL.FROM || 'onboarding@resend.dev',
-                to,
-                subject,
-                html,
-            });
-            if (response.error) {
-                console.error(`[EMAIL ERROR] Resend API error:`, response.error);
-                // Fall through to SMTP fallback
-            }
-            else {
-                console.log(`[EMAIL ✓] Successfully sent via Resend to ${to}`);
-                console.log(`[EMAIL ✓] Message ID: ${response.data?.id}`);
-                return true;
-            }
+    console.log(`[EMAIL DEBUG] BREVO_API_KEY available: ${!!env_1.env.BREVO_API_KEY}`);
+    if (!env_1.env.BREVO_API_KEY) {
+        if (!isProduction) {
+            console.log(`\n=== DEV EMAIL ===\nTo: ${to}\nSubject: ${subject}\n=================\n${html}\n`);
+            return true;
         }
-        catch (error) {
-            console.error(`[EMAIL ERROR] Resend API failed:`, error.message);
-            // Fall through to SMTP fallback
-        }
+        console.error('[EMAIL] ❌ BREVO_API_KEY not configured in production!');
+        return false;
     }
-    // Fallback to SMTP
-    const transporter = getSMTPTransporter();
-    if (transporter) {
-        try {
-            console.log(`[EMAIL] Resend unavailable, trying SMTP fallback...`);
-            // Retry logic with exponential backoff
-            let attempts = 0;
-            const maxAttempts = 3;
-            while (attempts < maxAttempts) {
-                try {
-                    const info = await transporter.sendMail({
-                        from: env_1.env.EMAIL.FROM,
-                        to,
-                        subject,
-                        html,
-                    });
-                    console.log(`[EMAIL ✓] Successfully sent via SMTP to ${to}`);
-                    console.log(`[EMAIL ✓] Message ID: ${info.messageId}`);
-                    return true;
-                }
-                catch (error) {
-                    attempts++;
-                    if (error.code === 'ETIMEDOUT' || error.code === 'EHOSTUNREACH' || error.message.includes('timeout')) {
-                        console.warn(`[EMAIL WARNING] SMTP timeout attempt ${attempts}/${maxAttempts}: ${error.message}`);
-                        if (attempts < maxAttempts) {
-                            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempts) * 1000));
-                            continue;
-                        }
-                    }
-                    throw error;
-                }
-            }
-        }
-        catch (error) {
-            console.error(`[EMAIL ERROR] SMTP failed for ${to}:`, error.message);
-            // Fall through to console log
-        }
-    }
-    // Fallback to dev console (non-production only)
-    if (!isProduction) {
-        console.log(`
-=========================================
-[DEV EMAIL OUTBOX]
-To: ${to}
-Subject: ${subject}
-=========================================
-${html}
-=========================================
-`);
-        return true;
-    }
-    // Production mode without email service = failure
-    console.error(`[EMAIL ERROR] No email service available (Resend API key missing and SMTP not configured)`);
-    return false;
+    return sendViaBrevo(to, subject, html);
 };
 exports.sendEmail = sendEmail;
-// Email templates
+// ─── Email Templates ──────────────────────────────────────────────────────────
 const sendVerificationEmail = async (email, token) => {
     const verifyUrl = `${env_1.env.CLIENT_URL}/verify-email?token=${token}`;
     const html = `
-    <h3>Welcome to CryptoPlatform!</h3>
-    <p>Please verify your email by clicking the link below:</p>
-    <a href="${verifyUrl}" target="_blank" style="padding: 10px 20px; background: #00e676; color: black; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Verify Email</a>
-    <p>If button doesn't work, copy-paste this link in your browser:</p>
-    <p>${verifyUrl}</p>
-    <p>This token will expire in 24 hours.</p>
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"></head>
+    <body style="font-family: Arial, sans-serif; background: #0f0f1a; padding: 40px;">
+      <div style="max-width: 500px; margin: 0 auto; background: #1a1a2e; border-radius: 12px; padding: 32px;">
+        <h2 style="color: #00e676; margin-top: 0;">✅ Verify Your Email</h2>
+        <p style="color: #cccccc;">Welcome to <strong>CryptoPlatform</strong>! Please verify your email to activate your account.</p>
+        <a href="${verifyUrl}" target="_blank"
+          style="display:inline-block;margin:20px 0;padding:14px 28px;background:#00e676;color:#000;
+                 text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px;">
+          Verify Email
+        </a>
+        <p style="color:#888;font-size:13px;">Button not working? Copy this link:</p>
+        <p style="word-break:break-all;color:#00e676;font-size:12px;">${verifyUrl}</p>
+        <hr style="border-color:#333;margin:24px 0;">
+        <p style="color:#555;font-size:12px;">Link expires in 24 hours.</p>
+      </div>
+    </body>
+    </html>
   `;
-    return (0, exports.sendEmail)(email, 'Verify Your Email Address - CryptoPlatform', html);
+    return (0, exports.sendEmail)(email, 'Verify Your Email - CryptoPlatform', html);
 };
 exports.sendVerificationEmail = sendVerificationEmail;
 const sendPasswordResetEmail = async (email, token) => {
     const resetUrl = `${env_1.env.CLIENT_URL}/reset-password?token=${token}`;
     const html = `
-    <h3>Password Reset Request</h3>
-    <p>You requested a password reset. Click the button below to set a new password:</p>
-    <a href="${resetUrl}" target="_blank" style="padding: 10px 20px; background: #d500f9; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Reset Password</a>
-    <p>If button doesn't work, copy-paste this link in your browser:</p>
-    <p>${resetUrl}</p>
-    <p>This link will expire in 1 hour.</p>
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"></head>
+    <body style="font-family: Arial, sans-serif; background: #0f0f1a; padding: 40px;">
+      <div style="max-width: 500px; margin: 0 auto; background: #1a1a2e; border-radius: 12px; padding: 32px;">
+        <h2 style="color: #d500f9; margin-top: 0;">🔑 Password Reset</h2>
+        <p style="color: #cccccc;">You requested a password reset for your <strong>CryptoPlatform</strong> account.</p>
+        <a href="${resetUrl}" target="_blank"
+          style="display:inline-block;margin:20px 0;padding:14px 28px;background:#d500f9;color:#fff;
+                 text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px;">
+          Reset Password
+        </a>
+        <p style="color:#888;font-size:13px;">Button not working? Copy this link:</p>
+        <p style="word-break:break-all;color:#d500f9;font-size:12px;">${resetUrl}</p>
+        <hr style="border-color:#333;margin:24px 0;">
+        <p style="color:#555;font-size:12px;">Link expires in 1 hour.</p>
+      </div>
+    </body>
+    </html>
   `;
     return (0, exports.sendEmail)(email, 'Reset Password - CryptoPlatform', html);
 };
