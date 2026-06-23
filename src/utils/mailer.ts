@@ -17,15 +17,16 @@ const getTransporter = () => {
       host: env.EMAIL.HOST,
       port: env.EMAIL.PORT,
       secure: env.EMAIL.PORT === 465, // Use TLS for 587, SSL for 465
-      connectionTimeout: 10000, // Increased for Render
-      greetingTimeout: 10000,
-      socketTimeout: 10000,
+      connectionTimeout: 15000, // Increased for Render
+      greetingTimeout: 15000,
+      socketTimeout: 15000,
+      rejectUnauthorized: false, // Allow self-signed certificates
       auth: {
         user: env.EMAIL.USER,
         pass: env.EMAIL.PASS,
       },
     });
-    console.log(`[EMAIL] Transporter created: ${env.EMAIL.HOST}:${env.EMAIL.PORT} (secure: ${env.EMAIL.PORT === 465})`);\
+    console.log(`[EMAIL] Transporter created: ${env.EMAIL.HOST}:${env.EMAIL.PORT} (secure: ${env.EMAIL.PORT === 465}, rejectUnauthorized: false)`);\
   }
   return transporter;
 };
