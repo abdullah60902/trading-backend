@@ -1,20 +1,47 @@
-import { Resend } from 'resend';
 import { env } from '../config/env';
 
-// ─── Resend Client ────────────────────────────────────────────────────────────
-let resendClient: Resend | null = null;
+// ─── Brevo (Sendinblue) HTTP API ──────────────────────────────────────────────
+// Free: 300 emails/day | No domain needed | Works on Render
+// Signup: brevo.com → Settings → API Keys → Create API Key
 
-const getResendClient = (): Resend | null => {
-  if (resendClient) return resendClient;
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
-  if (!env.RESEND_API_KEY) {
-    console.warn('[EMAIL] ⚠️  RESEND_API_KEY not set.');
-    return null;
+const sendViaBrevo = async (
+  to: string,
+  subject: string,
+  html: string
+): Promise<boolean> => {
+  if (!env.BREVO_API_KEY) {
+    console.warn('[EMAIL] ⚠️  BREVO_API_KEY not set.');
+    return false;
   }
 
-  resendClient = new Resend(env.RESEND_API_KEY);
-  console.log('[EMAIL] ✓ Resend client initialized');
-  return resendClient;
+  const payload = {
+    sender: { name: 'Crypto Platform', email: env.EMAIL.USER || 'info.bright.future.ser@gmail.com' },
+    to: [{ email: to }],
+    subject,
+    htmlContent: html,
+  };
+
+  const response = await fetch(BREVO_API_URL, {
+    method: 'POST',
+    headers: {
+      'accept': 'application/json',
+      'api-key': env.BREVO_API_KEY,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error(`[EMAIL] ❌ Brevo error:`, JSON.stringify(errorData));
+    return false;
+  }
+
+  const data: any = await response.json();
+  console.log(`[EMAIL] ✓ Email sent via Brevo to ${to} | ID: ${data?.messageId}`);
+  return true;
 };
 
 // ─── Core Send Function ───────────────────────────────────────────────────────
@@ -23,41 +50,20 @@ export const sendEmail = async (to: string, subject: string, html: string): Prom
 
   console.log(`[EMAIL] Attempting to send email to: ${to}`);
 
-  const client = getResendClient();
-
-  if (!client) {
+  // Dev fallback — print to console if Brevo not configured
+  if (!env.BREVO_API_KEY) {
     if (!isProduction) {
       console.log(`\n=== DEV EMAIL ===\nTo: ${to}\nSubject: ${subject}\n=================\n${html}\n`);
       return true;
     }
-    console.error('[EMAIL] ❌ RESEND_API_KEY not configured.');
+    console.error('[EMAIL] ❌ BREVO_API_KEY not set in production!');
     return false;
   }
 
   try {
-    // ✅ IMPORTANT: Use onboarding@resend.dev as FROM
-    // Resend allows sending to ANY email from this address WITHOUT domain verification
-    // If you verify your own domain later, change this to your domain email
-    const fromAddress = 'Crypto Platform <onboarding@resend.dev>';
-
-    console.log(`[EMAIL] Sending via Resend (from: ${fromAddress})...`);
-
-    const { data, error } = await client.emails.send({
-      from: fromAddress,
-      to,
-      subject,
-      html,
-    });
-
-    if (error) {
-      console.error(`[EMAIL] ❌ Resend error sending to ${to}:`, JSON.stringify(error));
-      return false;
-    }
-
-    console.log(`[EMAIL] ✓ Email sent successfully to ${to} | ID: ${data?.id}`);
-    return true;
+    return await sendViaBrevo(to, subject, html);
   } catch (err: any) {
-    console.error(`[EMAIL] ❌ Exception sending to ${to}:`, err.message);
+    console.error(`[EMAIL] ❌ Exception:`, err.message);
     return false;
   }
 };
@@ -69,7 +75,7 @@ export const sendVerificationEmail = async (email: string, token: string): Promi
     <!DOCTYPE html>
     <html>
     <head><meta charset="UTF-8"></head>
-    <body style="font-family: Arial, sans-serif; background: #0f0f1a; color: #ffffff; padding: 40px;">
+    <body style="font-family: Arial, sans-serif; background: #0f0f1a; padding: 40px;">
       <div style="max-width: 500px; margin: 0 auto; background: #1a1a2e; border-radius: 12px; padding: 32px;">
         <h2 style="color: #00e676; margin-top: 0;">✅ Verify Your Email</h2>
         <p style="color: #cccccc;">Welcome to <strong>CryptoPlatform</strong>! Please verify your email to activate your account.</p>
@@ -95,7 +101,7 @@ export const sendPasswordResetEmail = async (email: string, token: string): Prom
     <!DOCTYPE html>
     <html>
     <head><meta charset="UTF-8"></head>
-    <body style="font-family: Arial, sans-serif; background: #0f0f1a; color: #ffffff; padding: 40px;">
+    <body style="font-family: Arial, sans-serif; background: #0f0f1a; padding: 40px;">
       <div style="max-width: 500px; margin: 0 auto; background: #1a1a2e; border-radius: 12px; padding: 32px;">
         <h2 style="color: #d500f9; margin-top: 0;">🔑 Password Reset</h2>
         <p style="color: #cccccc;">You requested a password reset for your <strong>CryptoPlatform</strong> account.</p>

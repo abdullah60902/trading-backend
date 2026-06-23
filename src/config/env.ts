@@ -12,6 +12,7 @@ export const env = {
   CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:3000',
   NODE_ENV: process.env.NODE_ENV || 'development',
   RESEND_API_KEY: process.env.RESEND_API_KEY || '',
+  BREVO_API_KEY: process.env.BREVO_API_KEY || '',
   EMAIL: {
     HOST: process.env.EMAIL_HOST || '',
     PORT: parseInt(process.env.EMAIL_PORT || '2525', 10),
