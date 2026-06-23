@@ -8,6 +8,37 @@ let verifyConnected = false;
 const getTransporter = () => {
   if (transporter) return transporter;
 
+  // Prefer Resend over SMTP for reliability on Render
+  if (env.RESEND_API_KEY) {
+    // Using Resend's SMTP bridge
+    transporter = nodemailer.createTransport({
+      host: 'smtp.resend.com',
+      port: 465,
+      secure: true,
+      auth: {
+        user: 'resend',
+        pass: env.RESEND_API_KEY,
+      },
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 30000,
+    });
+    console.log(`[EMAIL] ✓ Resend transporter created`);
+    
+    if (!verifyConnected) {
+      transporter.verify((error: any, success: boolean) => {
+        if (error) {
+          console.error(`[EMAIL WARNING] Resend verification failed:`, error.message);
+        } else {
+          console.log(`[EMAIL ✓] Resend connection verified`);
+          verifyConnected = true;
+        }
+      });
+    }
+    return transporter;
+  }
+
+  // Fallback to SMTP if available
   const isConfigured =
     env.EMAIL.HOST &&
     env.EMAIL.USER &&
@@ -35,7 +66,7 @@ const getTransporter = () => {
         pass: env.EMAIL.PASS,
       },
     });
-    console.log(`[EMAIL] ✓ Transporter created: ${env.EMAIL.HOST}:${env.EMAIL.PORT} (${isSSL ? 'SSL' : 'TLS'})`);
+    console.log(`[EMAIL] ✓ SMTP Transporter created: ${env.EMAIL.HOST}:${env.EMAIL.PORT} (${isSSL ? 'SSL' : 'TLS'})`);
     
     // Verify connection once
     if (!verifyConnected) {

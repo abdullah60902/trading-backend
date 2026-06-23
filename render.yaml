@@ -18,6 +18,8 @@ services:
         generateValue: true
       - key: JWT_REFRESH_SECRET
         generateValue: true
+      - key: RESEND_API_KEY
+        sync: false
       - key: EMAIL_HOST
         value: smtp.gmail.com
       - key: EMAIL_PORT
@@ -27,7 +29,7 @@ services:
       - key: EMAIL_PASS
         value: frncxlgzkubsrdkn
       - key: EMAIL_FROM
-        value: '"Crypto Platform" <info.bright.future.ser@gmail.com>'
+        value: '"Crypto Platform" <noreply@cryptoplatform.com>'
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
