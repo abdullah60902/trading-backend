@@ -15,6 +15,7 @@ exports.env = {
     JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret_key',
     CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:3000',
     NODE_ENV: process.env.NODE_ENV || 'development',
+    RESEND_API_KEY: process.env.RESEND_API_KEY || '',
     EMAIL: {
         HOST: process.env.EMAIL_HOST || '',
         PORT: parseInt(process.env.EMAIL_PORT || '2525', 10),

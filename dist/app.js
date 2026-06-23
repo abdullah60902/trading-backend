@@ -29,8 +29,24 @@ app.use((0, helmet_1.default)({
     crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 // CORS Policy
-app.use((0, cors_1.default)({
-    origin: env_1.env.CLIENT_URL,
+app.use(
+// Allow the configured client URL and always allow localhost for local dev.
+// Use a function so we can gracefully accept requests without an Origin (server-to-server, curl).
+(0, cors_1.default)({
+    origin: (origin, callback) => {
+        // Allow non-browser requests with no origin
+        if (!origin)
+            return callback(null, true);
+        const allowedOrigins = [
+            env_1.env.CLIENT_URL,
+            'http://localhost:3000',
+            'http://127.0.0.1:3000',
+        ];
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        return callback(new Error('CORS policy: Origin not allowed'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],

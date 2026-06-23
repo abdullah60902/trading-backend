@@ -115,10 +115,22 @@ const signup = async (req, res) => {
                 depositAddress: address,
             });
         }
-        // Send Verification Email asynchronously (Fire and forget) to prevent UI hanging
-        (0, mailer_1.sendVerificationEmail)(user.email, verificationToken).catch(err => {
-            console.error('[BG EMAIL ERROR]', err);
-        });
+        // Send Verification Email synchronously and handle errors
+        try {
+            const emailSent = await (0, mailer_1.sendVerificationEmail)(user.email, verificationToken);
+            if (!emailSent) {
+                console.error('[SIGNUP] Email send failed for', user.email);
+                // In production, might want to fail signup or queue for retry
+                // For now, we allow signup but warn the user
+            }
+            else {
+                console.log('[SIGNUP] Verification email sent successfully to', user.email);
+            }
+        }
+        catch (err) {
+            console.error('[SIGNUP] Email send exception:', err);
+            // Allow signup to continue but user needs to know
+        }
         // Audit log
         await logUserActivity(user._id.toString(), 'ACCOUNT_CREATED', req);
         res.status(201).json({
@@ -268,7 +280,12 @@ const login = async (req, res) => {
             return;
         }
         if (!user.isEmailVerified) {
-            res.status(403).json({ error: 'Please verify your email before logging in.' });
+            console.log(`[LOGIN] Email not verified for user ${email}`);
+            res.status(403).json({
+                error: 'Please verify your email before logging in.',
+                code: 'EMAIL_NOT_VERIFIED',
+                message: 'Your email address needs to be verified. Check your inbox for the verification link.'
+            });
             return;
         }
         // Check if 2FA is active

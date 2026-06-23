@@ -4,61 +4,154 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendPasswordResetEmail = exports.sendVerificationEmail = exports.sendEmail = void 0;
+const resend_1 = require("resend");
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const env_1 = require("../config/env");
-// Create a transporter or mock it
-let transporter = null;
-const getTransporter = () => {
-    if (transporter)
-        return transporter;
+// Resend client
+let resendClient = null;
+// Fallback SMTP transporter
+let smtpTransporter = null;
+let smtpConnected = false;
+// Initialize Resend client if API key is available
+const getResendClient = () => {
+    if (resendClient)
+        return resendClient;
+    if (env_1.env.RESEND_API_KEY) {
+        resendClient = new resend_1.Resend(env_1.env.RESEND_API_KEY);
+        console.log(`[EMAIL] ✓ Resend API client initialized`);
+        return resendClient;
+    }
+    return null;
+};
+// Initialize SMTP transporter as fallback
+const getSMTPTransporter = () => {
+    if (smtpTransporter)
+        return smtpTransporter;
     const isConfigured = env_1.env.EMAIL.HOST &&
         env_1.env.EMAIL.USER &&
         env_1.env.EMAIL.USER !== 'mock_user';
-    if (isConfigured) {
-        transporter = nodemailer_1.default.createTransport({
-            host: env_1.env.EMAIL.HOST,
-            port: env_1.env.EMAIL.PORT,
-            secure: env_1.env.EMAIL.PORT === 465,
-            connectionTimeout: 5000,
-            greetingTimeout: 5000,
-            socketTimeout: 5000,
-            auth: {
-                user: env_1.env.EMAIL.USER,
-                pass: env_1.env.EMAIL.PASS,
-            },
-        });
-    }
-    return transporter;
+    if (!isConfigured)
+        return null;
+    const isSSL = env_1.env.EMAIL.PORT === 465;
+    const transportConfig = {
+        host: env_1.env.EMAIL.HOST,
+        port: env_1.env.EMAIL.PORT,
+        secure: isSSL,
+        connectionTimeout: 30000,
+        greetingTimeout: 30000,
+        socketTimeout: 30000,
+        rejectUnauthorized: false,
+        maxConnections: 5,
+        maxMessages: 100,
+        rateDelta: 1000,
+        rateLimit: 14,
+        auth: {
+            user: env_1.env.EMAIL.USER,
+            pass: env_1.env.EMAIL.PASS,
+        },
+    };
+    smtpTransporter = nodemailer_1.default.createTransport(transportConfig);
+    console.log(`[EMAIL] ✓ SMTP Transporter created: ${env_1.env.EMAIL.HOST}:${env_1.env.EMAIL.PORT} (${isSSL ? 'SSL' : 'TLS'})`);
+    // Verify connection once
+    smtpTransporter.verify((error, success) => {
+        if (error) {
+            console.error(`[EMAIL WARNING] SMTP verification failed:`, error.message);
+            smtpConnected = false;
+        }
+        else {
+            console.log(`[EMAIL ✓] SMTP connection verified`);
+            smtpConnected = true;
+        }
+    });
+    return smtpTransporter;
 };
 const sendEmail = async (to, subject, html) => {
-    const currentTransporter = getTransporter();
-    if (currentTransporter) {
+    const isProduction = env_1.env.NODE_ENV === 'production';
+    console.log(`[EMAIL] Attempting to send email to: ${to}`);
+    console.log(`[EMAIL DEBUG] RESEND_API_KEY available: ${!!env_1.env.RESEND_API_KEY}`);
+    // Try Resend first (preferred method)
+    const resend = getResendClient();
+    if (resend) {
         try {
-            await currentTransporter.sendMail({
-                from: env_1.env.EMAIL.FROM,
+            console.log(`[EMAIL] Sending via Resend API...`);
+            const response = await resend.emails.send({
+                from: env_1.env.EMAIL.FROM || 'noreply@cryptoplatform.com',
                 to,
                 subject,
                 html,
             });
-            console.log(`[EMAIL SUCCESS] Sent email to ${to} with subject "${subject}"`);
-            return true;
+            if (response.error) {
+                console.error(`[EMAIL ERROR] Resend API error:`, response.error);
+                // Fall through to SMTP fallback
+            }
+            else {
+                console.log(`[EMAIL ✓] Successfully sent via Resend to ${to}`);
+                console.log(`[EMAIL ✓] Message ID: ${response.data?.id}`);
+                return true;
+            }
         }
         catch (error) {
-            console.error('[EMAIL ERROR] Failed to send email via SMTP:', error);
+            console.error(`[EMAIL ERROR] Resend API failed:`, error.message);
+            // Fall through to SMTP fallback
         }
     }
-    // Fallback dev console logger
-    console.log(`
+    // Fallback to SMTP
+    const transporter = getSMTPTransporter();
+    if (transporter) {
+        try {
+            console.log(`[EMAIL] Resend unavailable, trying SMTP fallback...`);
+            // Retry logic with exponential backoff
+            let attempts = 0;
+            const maxAttempts = 3;
+            while (attempts < maxAttempts) {
+                try {
+                    const info = await transporter.sendMail({
+                        from: env_1.env.EMAIL.FROM,
+                        to,
+                        subject,
+                        html,
+                    });
+                    console.log(`[EMAIL ✓] Successfully sent via SMTP to ${to}`);
+                    console.log(`[EMAIL ✓] Message ID: ${info.messageId}`);
+                    return true;
+                }
+                catch (error) {
+                    attempts++;
+                    if (error.code === 'ETIMEDOUT' || error.code === 'EHOSTUNREACH' || error.message.includes('timeout')) {
+                        console.warn(`[EMAIL WARNING] SMTP timeout attempt ${attempts}/${maxAttempts}: ${error.message}`);
+                        if (attempts < maxAttempts) {
+                            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempts) * 1000));
+                            continue;
+                        }
+                    }
+                    throw error;
+                }
+            }
+        }
+        catch (error) {
+            console.error(`[EMAIL ERROR] SMTP failed for ${to}:`, error.message);
+            // Fall through to console log
+        }
+    }
+    // Fallback to dev console (non-production only)
+    if (!isProduction) {
+        console.log(`
 =========================================
 [DEV EMAIL OUTBOX]
 To: ${to}
 Subject: ${subject}
 =========================================
+${html}
+=========================================
 `);
-    return true;
+        return true;
+    }
+    // Production mode without email service = failure
+    console.error(`[EMAIL ERROR] No email service available (Resend API key missing and SMTP not configured)`);
+    return false;
 };
 exports.sendEmail = sendEmail;
-// Ready-to-use mail templates
+// Email templates
 const sendVerificationEmail = async (email, token) => {
     const verifyUrl = `${env_1.env.CLIENT_URL}/verify-email?token=${token}`;
     const html = `

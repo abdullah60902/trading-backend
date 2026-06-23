@@ -10,6 +10,7 @@ const Settings_1 = require("./models/Settings");
 const cron_1 = require("./utils/cron");
 const http_1 = __importDefault(require("http"));
 const socket_1 = require("./utils/socket");
+// Deployment: 2026-06-23 - Render redeploy with production environment variables
 const startServer = async () => {
     try {
         // 1. Connect to MongoDB
