@@ -19,7 +19,7 @@ services:
       - key: JWT_REFRESH_SECRET
         generateValue: true
       - key: RESEND_API_KEY
-        sync: false
+        value: re_Xre8TrWD_J2hPYj5Rt9DazU1LLBeiEvyD
       - key: EMAIL_HOST
         value: smtp.gmail.com
       - key: EMAIL_PORT
