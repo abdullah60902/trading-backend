@@ -1,47 +1,64 @@
+import https from 'https';
 import { env } from '../config/env';
 
-// ─── Brevo (Sendinblue) HTTP API ──────────────────────────────────────────────
-// Free: 300 emails/day | No domain needed | Works on Render
-// Signup: brevo.com → Settings → API Keys → Create API Key
+// ─── Brevo HTTP API (No SMTP - works on all cloud providers) ─────────────────
+const sendViaBrevo = (to: string, subject: string, html: string): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if (!env.BREVO_API_KEY) {
+      console.warn('[EMAIL] ⚠️  BREVO_API_KEY not set.');
+      resolve(false);
+      return;
+    }
 
-const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+    const senderEmail = env.EMAIL.USER || 'info.bright.future.ser@gmail.com';
 
-const sendViaBrevo = async (
-  to: string,
-  subject: string,
-  html: string
-): Promise<boolean> => {
-  if (!env.BREVO_API_KEY) {
-    console.warn('[EMAIL] ⚠️  BREVO_API_KEY not set.');
-    return false;
-  }
+    const payload = JSON.stringify({
+      sender: { name: 'Crypto Platform', email: senderEmail },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    });
 
-  const payload = {
-    sender: { name: 'Crypto Platform', email: env.EMAIL.USER || 'info.bright.future.ser@gmail.com' },
-    to: [{ email: to }],
-    subject,
-    htmlContent: html,
-  };
+    const options = {
+      hostname: 'api.brevo.com',
+      path: '/v3/smtp/email',
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': env.BREVO_API_KEY,
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(payload),
+      },
+    };
 
-  const response = await fetch(BREVO_API_URL, {
-    method: 'POST',
-    headers: {
-      'accept': 'application/json',
-      'api-key': env.BREVO_API_KEY,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify(payload),
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            console.log(`[EMAIL] ✓ Email sent via Brevo to ${to} | ID: ${parsed.messageId}`);
+            resolve(true);
+          } else {
+            console.error(`[EMAIL] ❌ Brevo error [${res.statusCode}]:`, JSON.stringify(parsed));
+            resolve(false);
+          }
+        } catch {
+          console.error('[EMAIL] ❌ Failed to parse Brevo response');
+          resolve(false);
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      console.error('[EMAIL] ❌ Brevo request error:', err.message);
+      resolve(false);
+    });
+
+    req.write(payload);
+    req.end();
   });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    console.error(`[EMAIL] ❌ Brevo error:`, JSON.stringify(errorData));
-    return false;
-  }
-
-  const data: any = await response.json();
-  console.log(`[EMAIL] ✓ Email sent via Brevo to ${to} | ID: ${data?.messageId}`);
-  return true;
 };
 
 // ─── Core Send Function ───────────────────────────────────────────────────────
@@ -49,23 +66,18 @@ export const sendEmail = async (to: string, subject: string, html: string): Prom
   const isProduction = env.NODE_ENV === 'production';
 
   console.log(`[EMAIL] Attempting to send email to: ${to}`);
+  console.log(`[EMAIL DEBUG] BREVO_API_KEY available: ${!!env.BREVO_API_KEY}`);
 
-  // Dev fallback — print to console if Brevo not configured
   if (!env.BREVO_API_KEY) {
     if (!isProduction) {
       console.log(`\n=== DEV EMAIL ===\nTo: ${to}\nSubject: ${subject}\n=================\n${html}\n`);
       return true;
     }
-    console.error('[EMAIL] ❌ BREVO_API_KEY not set in production!');
+    console.error('[EMAIL] ❌ BREVO_API_KEY not configured in production!');
     return false;
   }
 
-  try {
-    return await sendViaBrevo(to, subject, html);
-  } catch (err: any) {
-    console.error(`[EMAIL] ❌ Exception:`, err.message);
-    return false;
-  }
+  return sendViaBrevo(to, subject, html);
 };
 
 // ─── Email Templates ──────────────────────────────────────────────────────────
@@ -87,7 +99,7 @@ export const sendVerificationEmail = async (email: string, token: string): Promi
         <p style="color:#888;font-size:13px;">Button not working? Copy this link:</p>
         <p style="word-break:break-all;color:#00e676;font-size:12px;">${verifyUrl}</p>
         <hr style="border-color:#333;margin:24px 0;">
-        <p style="color:#555;font-size:12px;">Link expires in 24 hours. If you did not sign up, ignore this email.</p>
+        <p style="color:#555;font-size:12px;">Link expires in 24 hours.</p>
       </div>
     </body>
     </html>
@@ -113,7 +125,7 @@ export const sendPasswordResetEmail = async (email: string, token: string): Prom
         <p style="color:#888;font-size:13px;">Button not working? Copy this link:</p>
         <p style="word-break:break-all;color:#d500f9;font-size:12px;">${resetUrl}</p>
         <hr style="border-color:#333;margin:24px 0;">
-        <p style="color:#555;font-size:12px;">Link expires in 1 hour. If you did not request this, ignore this email.</p>
+        <p style="color:#555;font-size:12px;">Link expires in 1 hour.</p>
       </div>
     </body>
     </html>
