@@ -3,6 +3,7 @@ import { env } from '../config/env';
 
 // Create a transporter or mock it
 let transporter: nodemailer.Transporter | null = null;
+let verifyConnected = false;
 
 const getTransporter = () => {
   if (transporter) return transporter;
@@ -13,20 +14,41 @@ const getTransporter = () => {
     env.EMAIL.USER !== 'mock_user';
 
   if (isConfigured) {
+    // For port 465: use SSL (secure: true)
+    // For port 587: use TLS (secure: false, STARTTLS enabled)
+    const isSSL = env.EMAIL.PORT === 465;
+    
     transporter = nodemailer.createTransport({
       host: env.EMAIL.HOST,
       port: env.EMAIL.PORT,
-      secure: env.EMAIL.PORT === 465, // Use TLS for 587, SSL for 465
-      connectionTimeout: 15000, // Increased for Render
-      greetingTimeout: 15000,
-      socketTimeout: 15000,
-      rejectUnauthorized: false, // Allow self-signed certificates
+      secure: isSSL, // true for 465 (SSL), false for 587 (STARTTLS)
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 30000,
+      rejectUnauthorized: false,
+      maxConnections: 5,
+      maxMessages: 100,
+      rateDelta: 1000,
+      rateLimit: 14,
       auth: {
         user: env.EMAIL.USER,
         pass: env.EMAIL.PASS,
       },
     });
-    console.log(`[EMAIL] Transporter created: ${env.EMAIL.HOST}:${env.EMAIL.PORT} (secure: ${env.EMAIL.PORT === 465}, rejectUnauthorized: false)`);\
+    console.log(`[EMAIL] ✓ Transporter created: ${env.EMAIL.HOST}:${env.EMAIL.PORT} (${isSSL ? 'SSL' : 'TLS'})`);
+    
+    // Verify connection once
+    if (!verifyConnected) {
+      transporter.verify((error: any, success: boolean) => {
+        if (error) {
+          console.error(`[EMAIL WARNING] Connection verification failed:`, error.message);
+          verifyConnected = false;
+        } else {
+          console.log(`[EMAIL ✓] SMTP connection verified successfully`);
+          verifyConnected = true;
+        }
+      });
+    }
   }
   return transporter;
 };
@@ -41,15 +63,38 @@ export const sendEmail = async (to: string, subject: string, html: string): Prom
 
   if (currentTransporter) {
     try {
-      const info = await currentTransporter.sendMail({
-        from: env.EMAIL.FROM,
-        to,
-        subject,
-        html,
-      });
-      console.log(`[EMAIL ✓] Successfully sent to ${to}`);
-      console.log(`[EMAIL ✓] Message ID: ${info.messageId}`);
-      return true;
+      // Retry logic with exponential backoff
+      let attempts = 0;
+      const maxAttempts = 3;
+      
+      while (attempts < maxAttempts) {
+        try {
+          const info = await currentTransporter.sendMail({
+            from: env.EMAIL.FROM,
+            to,
+            subject,
+            html,
+          });
+          console.log(`[EMAIL ✓] Successfully sent to ${to}`);
+          console.log(`[EMAIL ✓] Message ID: ${info.messageId}`);
+          return true;
+        } catch (error: any) {
+          attempts++;
+          
+          // Check if it's a timeout error
+          if (error.code === 'ETIMEDOUT' || error.code === 'EHOSTUNREACH' || error.message.includes('timeout')) {
+            console.warn(`[EMAIL WARNING] Timeout attempt ${attempts}/${maxAttempts}: ${error.message}`);
+            
+            if (attempts < maxAttempts) {
+              // Wait before retrying (exponential backoff: 2s, 4s)
+              await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempts) * 1000));
+              continue;
+            }
+          }
+          
+          throw error;
+        }
+      }
     } catch (error: any) {
       console.error(`[EMAIL ERROR] SMTP send failed for ${to}:`, error.message);
       console.error(`[EMAIL ERROR] Full error:`, error);
