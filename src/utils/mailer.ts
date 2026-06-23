@@ -8,6 +8,10 @@ let verifyConnected = false;
 const getTransporter = () => {
   if (transporter) return transporter;
 
+  // DEBUG: Log environment variables
+  console.log(`[EMAIL DEBUG] RESEND_API_KEY is: "${env.RESEND_API_KEY}"`);
+  console.log(`[EMAIL DEBUG] EMAIL.HOST is: "${env.EMAIL.HOST}"`);
+
   // Prefer Resend over SMTP for reliability on Render
   if (env.RESEND_API_KEY) {
     // Using Resend's SMTP bridge
