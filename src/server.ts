@@ -6,6 +6,7 @@ import { startStakingCron } from './utils/cron';
 import http from 'http';
 import { initSocket } from './utils/socket';
 
+// Deployment: 2026-06-23 - Render redeploy with production environment variables
 const startServer = async () => {
   try {
     // 1. Connect to MongoDB
