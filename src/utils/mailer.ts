@@ -1,66 +1,63 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { env } from '../config/env';
 
-// ─── Transporter ──────────────────────────────────────────────────────────────
-let transporter: nodemailer.Transporter | null = null;
+// ─── Resend Client ────────────────────────────────────────────────────────────
+let resendClient: Resend | null = null;
 
-const getTransporter = (): nodemailer.Transporter => {
-  if (transporter) return transporter;
+const getResendClient = (): Resend | null => {
+  if (resendClient) return resendClient;
 
-  transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,          // ✅ 587 STARTTLS — Render par kaam karta hai
-    secure: false,      // ✅ false for STARTTLS (465=true SSL, 587=false TLS)
-    auth: {
-      user: env.EMAIL.USER,
-      pass: env.EMAIL.PASS,
-    },
-    tls: {
-      rejectUnauthorized: false,  // cloud servers ke liye
-    },
-    connectionTimeout: 10000,
-    socketTimeout: 15000,
-  });
+  if (!env.RESEND_API_KEY) {
+    console.warn('[EMAIL] ⚠️  RESEND_API_KEY not set.');
+    return null;
+  }
 
-  console.log('[EMAIL] ✓ Nodemailer transporter ready (Gmail SMTP port 587)');
-  return transporter;
+  resendClient = new Resend(env.RESEND_API_KEY);
+  console.log('[EMAIL] ✓ Resend client initialized');
+  return resendClient;
 };
 
 // ─── Core Send Function ───────────────────────────────────────────────────────
 export const sendEmail = async (to: string, subject: string, html: string): Promise<boolean> => {
   const isProduction = env.NODE_ENV === 'production';
 
-  console.log(`[EMAIL] Sending email to: ${to}`);
+  console.log(`[EMAIL] Attempting to send email to: ${to}`);
 
-  // Dev mode — agar Gmail configure nahi to console mein print karo
-  if (!env.EMAIL.USER || env.EMAIL.USER === 'mock_user') {
+  const client = getResendClient();
+
+  if (!client) {
     if (!isProduction) {
       console.log(`\n=== DEV EMAIL ===\nTo: ${to}\nSubject: ${subject}\n=================\n${html}\n`);
       return true;
     }
-    console.error('[EMAIL] ❌ EMAIL_USER not set!');
+    console.error('[EMAIL] ❌ RESEND_API_KEY not configured.');
     return false;
   }
 
   try {
-    const t = getTransporter();
-    const info = await t.sendMail({
-      from: env.EMAIL.FROM || `"Crypto Platform" <${env.EMAIL.USER}>`,
+    // ✅ IMPORTANT: Use onboarding@resend.dev as FROM
+    // Resend allows sending to ANY email from this address WITHOUT domain verification
+    // If you verify your own domain later, change this to your domain email
+    const fromAddress = 'Crypto Platform <onboarding@resend.dev>';
+
+    console.log(`[EMAIL] Sending via Resend (from: ${fromAddress})...`);
+
+    const { data, error } = await client.emails.send({
+      from: fromAddress,
       to,
       subject,
       html,
     });
 
-    console.log(`[EMAIL] ✓ Email sent to ${to} | ID: ${info.messageId}`);
+    if (error) {
+      console.error(`[EMAIL] ❌ Resend error sending to ${to}:`, JSON.stringify(error));
+      return false;
+    }
+
+    console.log(`[EMAIL] ✓ Email sent successfully to ${to} | ID: ${data?.id}`);
     return true;
   } catch (err: any) {
-    console.error(`[EMAIL] ❌ Failed to send to ${to}:`, err.message);
-
-    // Dev fallback
-    if (!isProduction) {
-      console.log(`\n=== DEV EMAIL (fallback) ===\nTo: ${to}\nSubject: ${subject}\n===========================\n${html}\n`);
-      return true;
-    }
+    console.error(`[EMAIL] ❌ Exception sending to ${to}:`, err.message);
     return false;
   }
 };
