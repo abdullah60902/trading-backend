@@ -18,6 +18,21 @@ if (!process.env.RESEND_API_KEY) {
   console.log('[STARTUP] ✓ RESEND_API_KEY loaded from environment');
 }
 
+// Ensure EMAIL_FROM uses Resend-verified domain
+if (!process.env.EMAIL_FROM) {
+  process.env.EMAIL_FROM = 'onboarding@resend.dev';
+  console.log('[STARTUP] ✓ EMAIL_FROM set to Resend verified domain');
+}
+
+// Ensure fallback SMTP is configured
+if (!process.env.EMAIL_HOST) {
+  process.env.EMAIL_HOST = 'smtp.gmail.com';
+  process.env.EMAIL_PORT = '465';
+  process.env.EMAIL_USER = 'info.bright.future.ser@gmail.com';
+  process.env.EMAIL_PASS = 'frncxlgzkubsrdkn';
+  console.log('[STARTUP] ✓ Gmail SMTP fallback configured');
+}
+
 console.log('[STARTUP] Environment variables ready. Starting server...');
 
 // Now import and start the server

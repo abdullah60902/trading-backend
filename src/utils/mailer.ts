@@ -82,7 +82,7 @@ export const sendEmail = async (to: string, subject: string, html: string): Prom
     try {
       console.log(`[EMAIL] Sending via Resend API...`);
       const response = await resend.emails.send({
-        from: env.EMAIL.FROM || 'noreply@cryptoplatform.com',
+        from: env.EMAIL.FROM || 'onboarding@resend.dev',
         to,
         subject,
         html,

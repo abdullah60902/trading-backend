@@ -75,7 +75,7 @@ const sendEmail = async (to, subject, html) => {
         try {
             console.log(`[EMAIL] Sending via Resend API...`);
             const response = await resend.emails.send({
-                from: env_1.env.EMAIL.FROM || 'noreply@cryptoplatform.com',
+                from: env_1.env.EMAIL.FROM || 'onboarding@resend.dev',
                 to,
                 subject,
                 html,
