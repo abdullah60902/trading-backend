@@ -28,8 +28,25 @@ app.use(helmet({
 
 // CORS Policy
 app.use(
+  // Allow the configured client URL and always allow localhost for local dev.
+  // Use a function so we can gracefully accept requests without an Origin (server-to-server, curl).
   cors({
-    origin: env.CLIENT_URL,
+    origin: (origin, callback) => {
+      // Allow non-browser requests with no origin
+      if (!origin) return callback(null, true);
+
+      const allowedOrigins = [
+        env.CLIENT_URL,
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+      ];
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error('CORS policy: Origin not allowed'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
