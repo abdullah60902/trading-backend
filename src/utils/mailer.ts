@@ -16,15 +16,16 @@ const getTransporter = () => {
     transporter = nodemailer.createTransport({
       host: env.EMAIL.HOST,
       port: env.EMAIL.PORT,
-      secure: env.EMAIL.PORT === 465,
-      connectionTimeout: 5000,
-      greetingTimeout: 5000,
-      socketTimeout: 5000,
+      secure: env.EMAIL.PORT === 465, // Use TLS for 587, SSL for 465
+      connectionTimeout: 10000, // Increased for Render
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
       auth: {
         user: env.EMAIL.USER,
         pass: env.EMAIL.PASS,
       },
     });
+    console.log(`[EMAIL] Transporter created: ${env.EMAIL.HOST}:${env.EMAIL.PORT} (secure: ${env.EMAIL.PORT === 465})`);\
   }
   return transporter;
 };
