@@ -31,28 +31,41 @@ const getTransporter = () => {
 
 export const sendEmail = async (to: string, subject: string, html: string): Promise<boolean> => {
   const currentTransporter = getTransporter();
+  const isProduction = env.NODE_ENV === 'production';
+  
+  console.log(`[EMAIL] Attempting to send to ${to}`);
+  console.log(`[EMAIL] SMTP configured: ${!!currentTransporter}`);
+  console.log(`[EMAIL] Using transporter: ${currentTransporter ? 'SMTP' : 'Console (DEV MODE)'}`);
 
   if (currentTransporter) {
     try {
-      await currentTransporter.sendMail({
+      const info = await currentTransporter.sendMail({
         from: env.EMAIL.FROM,
         to,
         subject,
         html,
       });
-      console.log(`[EMAIL SUCCESS] Sent email to ${to} with subject "${subject}"`);
+      console.log(`[EMAIL ✓] Successfully sent to ${to}`);
+      console.log(`[EMAIL ✓] Message ID: ${info.messageId}`);
       return true;
-    } catch (error) {
-      console.error('[EMAIL ERROR] Failed to send email via SMTP:', error);
+    } catch (error: any) {
+      console.error(`[EMAIL ERROR] SMTP send failed for ${to}:`, error.message);
+      console.error(`[EMAIL ERROR] Full error:`, error);
+      // Don't fallback to console on production
+      if (isProduction) {
+        return false;
+      }
     }
   }
 
-  // Fallback dev console logger
+  // Fallback dev console logger (non-production only)
   console.log(`
 =========================================
 [DEV EMAIL OUTBOX]
 To: ${to}
 Subject: ${subject}
+=========================================
+${html}
 =========================================
 `);
   return true;

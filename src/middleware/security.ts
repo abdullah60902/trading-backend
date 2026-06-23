@@ -31,14 +31,44 @@ export const csrfCheck = (req: Request, res: Response, next: NextFunction): void
     return next();
   }
 
-  const csrfHeader = req.headers['x-csrf-token'];
-  const csrfCookie = req.cookies['csrf-token'];
+  const csrfHeader = req.headers['x-csrf-token'] as string;
+  const csrfCookie = req.cookies['csrf-token'] as string;
+  const endpoint = `${req.method} ${req.path}`;
 
-  if (!csrfHeader || !csrfCookie || csrfHeader !== csrfCookie) {
-    res.status(403).json({ error: 'CSRF token verification failed' });
+  console.log(`[CSRF] Validating ${endpoint}`);
+  console.log(`[CSRF] Header token present: ${!!csrfHeader}, Cookie token present: ${!!csrfCookie}`);
+
+  if (!csrfHeader) {
+    console.error(`[CSRF] Missing header token for ${endpoint}`);
+    res.status(403).json({ 
+      error: 'CSRF token verification failed',
+      code: 'CSRF_HEADER_MISSING',
+      details: 'X-CSRF-Token header is missing from request'
+    });
     return;
   }
 
+  if (!csrfCookie) {
+    console.error(`[CSRF] Missing cookie token for ${endpoint}`);
+    res.status(403).json({ 
+      error: 'CSRF token verification failed',
+      code: 'CSRF_COOKIE_MISSING',
+      details: 'csrf-token cookie is missing from request'
+    });
+    return;
+  }
+
+  if (csrfHeader !== csrfCookie) {
+    console.error(`[CSRF] Token mismatch for ${endpoint}`);
+    res.status(403).json({ 
+      error: 'CSRF token verification failed',
+      code: 'CSRF_TOKEN_MISMATCH',
+      details: 'X-CSRF-Token header and csrf-token cookie do not match'
+    });
+    return;
+  }
+
+  console.log(`[CSRF] ✓ Validation passed for ${endpoint}`);
   next();
 };
 
