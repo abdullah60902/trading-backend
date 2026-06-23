@@ -19,15 +19,15 @@ services:
       - key: JWT_REFRESH_SECRET
         generateValue: true
       - key: EMAIL_HOST
-        sync: false
+        value: smtp.gmail.com
       - key: EMAIL_PORT
-        sync: false
+        value: 465
       - key: EMAIL_USER
-        sync: false
+        value: info.bright.future.ser@gmail.com
       - key: EMAIL_PASS
-        sync: false
+        value: frncxlgzkubsrdkn
       - key: EMAIL_FROM
-        sync: false
+        value: '"Crypto Platform" <info.bright.future.ser@gmail.com>'
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
